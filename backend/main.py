@@ -2,6 +2,7 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import models, schemas, utils
 from database import engine, get_db
+from fastapi.security import OAuth2PasswordRequestForm
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -19,6 +20,28 @@ async def root():
 @app.get("/health")
 async def health_check():
     return {"status": "healthy", "service": "Backend API is running smoothly."}
+
+
+# --- LOGIN ROUTE ---
+@app.post("/login", response_model=schemas.Token)
+def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+    # 1. Find the user in the database (OAuth2 uses 'username', but we will let them type their email here)
+    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    
+    # 2. Check if user exists AND password is correct
+    if not user or not utils.verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # 3. Create the JWT Token with their user_id embedded inside it
+    access_token = utils.create_access_token(data={"sub": str(user.id)})
+    
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
 
 # --- NEW USER ROUTE ---
 @app.post("/users/", response_model=schemas.UserResponse, status_code=status.HTTP_201_CREATED)
