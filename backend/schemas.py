@@ -38,6 +38,13 @@ class TaskBase(BaseModel):
 class TaskCreate(TaskBase):
     pass # It just inherits everything from TaskBase for now
 
+# Schema for updating a task (all fields are optional)
+class TaskUpdate(BaseModel):
+    title: Optional[str] = None
+    description: Optional[str] = None
+    priority: Optional[str] = None
+    is_completed: Optional[bool] = None
+
 # Schema for outgoing task data (includes database-generated fields)
 class TaskResponse(TaskBase):
     id: int

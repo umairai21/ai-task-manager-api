@@ -2,7 +2,8 @@ from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 import models, schemas, utils
 from database import engine, get_db
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+import jwt
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -21,6 +22,34 @@ async def root():
 async def health_check():
     return {"status": "healthy", "service": "Backend API is running smoothly."}
 
+# Tells FastAPI where clients can go to get a token
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+# --- THE BOUNCER ---
+def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        # 1. Decode the token using the secret key from utils.py
+        payload = jwt.decode(token, utils.SECRET_KEY, algorithms=[utils.ALGORITHM])
+        
+        # 2. Extract the user ID (we saved it as "sub" yesterday)
+        user_id: str = payload.get("sub")
+        if user_id is None:
+            raise credentials_exception
+            
+    except jwt.PyJWTError:
+        raise credentials_exception
+        
+    # 3. Find the actual user in the database
+    user = db.query(models.User).filter(models.User.id == int(user_id)).first()
+    if user is None:
+        raise credentials_exception
+        
+    return user
 
 # --- LOGIN ROUTE ---
 @app.post("/login", response_model=schemas.Token)
@@ -74,35 +103,70 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     # 6. Return the created user 
     return new_user
 
-# --- NEW TASK ROUTE ---
-@app.post("/users/{user_id}/tasks/", response_model=schemas.TaskResponse, status_code=status.HTTP_201_CREATED)
-def create_task_for_user(user_id: int, task: schemas.TaskCreate, db: Session = Depends(get_db)):
-    # 1. Verify the user actually exists in the database
-    db_user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
+# --- SECURE TASK CREATION ---
+@app.post("/tasks/", response_model=schemas.TaskResponse, status_code=status.HTTP_201_CREATED)
+def create_task(
+    task: schemas.TaskCreate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user) # <-- The lock!
+):
+    # Notice we don't look up the user anymore; the bouncer already did it!
+    new_task = models.Task(**task.model_dump(), owner_id=current_user.id)
     
-    # 2. Create the new task model object
-    # **task.model_dump() unpacks the title, description, and priority
-    new_task = models.Task(**task.model_dump(), owner_id=user_id)
-    
-    # 3. Save to the database
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
     
     return new_task
 
-# --- GET USER TASKS ROUTE ---
-# Notice we use a list of TaskResponses because one user can have many tasks
-@app.get("/users/{user_id}/tasks/", response_model=list[schemas.TaskResponse])
-def read_user_tasks(user_id: int, db: Session = Depends(get_db)):
-    # 1. Verify the user exists
-    db_user = db.query(models.User).filter(models.User.id == user_id).first()
-    if not db_user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    # 2. Fetch all tasks where the owner_id matches
-    tasks = db.query(models.Task).filter(models.Task.owner_id == user_id).all()
-    
+# --- SECURE TASK RETRIEVAL ---
+@app.get("/tasks/", response_model=list[schemas.TaskResponse])
+def read_tasks(
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user) # <-- The lock!
+):
+    # We only fetch tasks belonging to the currently logged-in user
+    tasks = db.query(models.Task).filter(models.Task.owner_id == current_user.id).all()
     return tasks
+
+# --- SECURE TASK UPDATE ---
+@app.put("/tasks/{task_id}", response_model=schemas.TaskResponse)
+def update_task(
+    task_id: int, 
+    task_update: schemas.TaskUpdate, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    # 1. Find the specific task that belongs to this user
+    db_task = db.query(models.Task).filter(models.Task.id == task_id, models.Task.owner_id == current_user.id).first()
+    
+    if db_task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    
+    # 2. Update only the fields that were actually provided in the request
+    update_data = task_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_task, key, value)
+        
+    # 3. Save changes
+    db.commit()
+    db.refresh(db_task)
+    return db_task
+
+# --- SECURE TASK DELETION ---
+@app.delete("/tasks/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_task(
+    task_id: int, 
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    # 1. Find the specific task
+    db_task = db.query(models.Task).filter(models.Task.id == task_id, models.Task.owner_id == current_user.id).first()
+    
+    if db_task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+        
+    # 2. Delete it
+    db.delete(db_task)
+    db.commit()
+    return # A 204 status code means successful action, but no data to return
