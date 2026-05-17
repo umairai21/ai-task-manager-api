@@ -1,3 +1,5 @@
+from urllib import response
+
 from passlib.context import CryptContext
 from datetime import datetime, timedelta, timezone
 from google.genai import Client
@@ -47,6 +49,23 @@ def get_ai_priority(title: str, description: str) -> str:
     Respond with EXACTLY ONE WORD from this list: High, Medium, Low.
     Do not add any punctuation, explanation, or extra text.
     
+    Rules:
+    - HIGH: System crashes, security threats, revenue loss, or broken core features.
+    - MEDIUM: Standard feature requests, minor bugs, and non-blocking issues.
+    - LOW: Cosmetic updates, internal requests, and office supplies.
+    
+    Examples:
+    Task: Title: Coffee machine broken. Description: The kitchen needs espresso.
+    Priority: Low
+    
+    Task: Title: Overcharging error. Description: Customers are being billed twice.
+    Priority: High
+    
+    Task: Title: Button color. Description: Make the submit button darker green.
+    Priority: Low
+    
+    CRITICAL INSTRUCTION: Always judge the priority based on the business and revenue impact described, not just the keywords in the title.
+    
     Task:
     {task_text}
     """
@@ -54,10 +73,11 @@ def get_ai_priority(title: str, description: str) -> str:
     try:
         # Using the modern client and the ultra-cheap Flash Lite model
         response = client.models.generate_content(
-            model='gemini-flash-lite-latest',
+            model='gemini-2.5-flash',
             contents=prompt,
         )
-        priority = response.text.strip().capitalize()
+        # The .replace() removes accidental periods before we check the list!
+        priority = response.text.strip().replace(".", "").capitalize()
         
         if priority not in ["High", "Medium", "Low"]:
             return "Medium"
