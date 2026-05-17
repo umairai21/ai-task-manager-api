@@ -103,21 +103,29 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     # 6. Return the created user 
     return new_user
 
-# --- SECURE TASK CREATION ---
+# --- SECURE TASK CREATION (WITH AI ENGINE) ---
 @app.post("/tasks/", response_model=schemas.TaskResponse, status_code=status.HTTP_201_CREATED)
 def create_task(
     task: schemas.TaskCreate, 
     db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_user) # <-- The lock!
+    current_user: models.User = Depends(get_current_user)
 ):
-    # Notice we don't look up the user anymore; the bouncer already did it!
-    new_task = models.Task(**task.model_dump(), owner_id=current_user.id)
+    # 1. Ask the AI for the priority based on what the user typed!
+    ai_priority = utils.get_ai_priority(title=task.title, description=task.description)
     
+    # 2. Unpack the user's data, OVERRIDE the priority with the AI's answer, and attach the user ID
+    task_data = task.model_dump()
+    task_data["priority"] = ai_priority # Inject the AI decision here!
+    
+    new_task = models.Task(**task_data, owner_id=current_user.id)
+    
+    # 3. Save to database
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
     
     return new_task
+
 
 # --- SECURE TASK RETRIEVAL ---
 @app.get("/tasks/", response_model=list[schemas.TaskResponse])
