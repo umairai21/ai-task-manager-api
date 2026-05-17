@@ -1,5 +1,6 @@
 from fastapi import FastAPI, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from fastapi.middleware.cors import CORSMiddleware
 import models, schemas, utils
 from database import engine, get_db
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
@@ -13,6 +14,17 @@ app = FastAPI(
     description="Backend system for managing tasks and AI suggestions.",
     version="1.0.0"
 )
+
+
+# --- 2. ADD THIS CORS BLOCK ---
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # In production, change "*" to your actual frontend URL!
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 @app.get("/")
 async def root():
