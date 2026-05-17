@@ -1,16 +1,16 @@
 # 🤖 AI-Powered Task Manager
 
-A full-stack, AI-driven task management system that uses Google's Gemini LLM to autonomously analyze and prioritize tasks based on business impact.
+A full-stack, AI-driven task management system designed as a proof-of-concept to demonstrate organizational capability for automating high-volume business workflows. It uses Google's Gemini LLM to autonomously analyze unstructured inputs and prioritize tasks based on real-world business impact.
 
 ---
 
 ## 🚀 Features
 
 - **AI Priority Engine** — Integrates Google Gemini 2.5 Flash using Few-Shot prompt engineering to dynamically grade tasks (High, Medium, Low) based on semantic context and revenue impact, not just keywords
-- **Secure Authentication** — Implements JWT (JSON Web Tokens) for secure user login and password hashing using bcrypt
+- **Secure Authentication** — Implements JWT (JSON Web Tokens) for secure user login and password hashing using bcrypt, demonstrating multi-tenant data privacy
 - **Modern Frontend** — A clean, responsive React SPA built with Vite to seamlessly consume the RESTful API and manage UI state
 - **Robust Backend** — Lightning-fast Python backend built with FastAPI, utilizing SQLAlchemy for ORM database operations
-- **Containerized Database** — Uses Docker to run a localized, production-ready PostgreSQL instance
+- **Containerized Database** — Uses Docker to run a localized, production-ready PostgreSQL instance to enforce strict relational data integrity
 
 ---
 
@@ -18,7 +18,7 @@ A full-stack, AI-driven task management system that uses Google's Gemini LLM to 
 
 | Layer | Technologies |
 |---|---|
-| **Backend** | Python, FastAPI, Uvicorn, SQLAlchemy, PyJWT |
+| **Backend** | Python, FastAPI, Uvicorn, SQLAlchemy, PyJWT, passlib |
 | **Frontend** | React, Vite, JavaScript |
 | **AI / LLM** | Google Gemini API (`gemini-2.5-flash`) |
 | **Database** | PostgreSQL (Docker Compose) |
@@ -38,6 +38,8 @@ A full-stack, AI-driven task management system that uses Google's Gemini LLM to 
 ## 💻 How to Run Locally
 
 ### 1. Start the Database
+
+Ensure Docker Desktop is running, then execute:
 
 ```bash
 docker compose up -d
@@ -61,8 +63,8 @@ Open a terminal in the `backend/` directory:
 uvicorn main:app --reload
 ```
 
-> The API will be available at **http://127.0.0.1:8000**
-> Visit `/docs` for the interactive Swagger UI.
+> API available at **http://127.0.0.1:8000**
+> Interactive Swagger UI at **http://127.0.0.1:8000/docs**
 
 ### 4. Start the React Dashboard
 
@@ -73,21 +75,6 @@ npm install
 npm run dev
 ```
 
-> The dashboard will automatically open in your browser.
+> The dashboard will automatically open in your browser at **http://localhost:5173**
 
 ---
-
-## 📁 Project Structure
-
-```
-├── backend/
-│   ├── main.py
-│   ├── .env          # ← your environment variables (never commit this)
-│   └── ...
-├── frontend/
-│   ├── src/
-│   └── ...
-└── docker-compose.yml
-```
-
-> ⚠️ **Never commit your `.env` file.** Make sure it's listed in your `.gitignore`.
