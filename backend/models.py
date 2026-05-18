@@ -13,6 +13,8 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    role = Column(String, default="employee") # e.g., employee, dispatcher, admin
+    department = Column(String, nullable=True) # e.g., IT, HR, Facilities
 
     # Relationship to the Task model (One-to-Many)
     tasks = relationship("Task", back_populates="owner")
@@ -27,6 +29,7 @@ class Task(Base):
     is_completed = Column(Boolean, default=False)
     priority = Column(String, default="Medium") # e.g., Low, Medium, High
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    assigned_department = Column(String, nullable=True) # The AI will fill this in
     
     # Foreign key linking to the User table
     owner_id = Column(Integer, ForeignKey("users.id"))
