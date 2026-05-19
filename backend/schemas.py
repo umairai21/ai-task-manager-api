@@ -14,6 +14,8 @@ class TokenData(BaseModel):
 class UserBase(BaseModel):
     email: str 
     username: str
+    role: Optional[str] = "employee"
+    department: Optional[str] = None
 
 class UserCreate(UserBase):
     # Enforce rules: password must be between 8 and 50 characters!
@@ -51,6 +53,7 @@ class TaskResponse(TaskBase):
     is_completed: bool
     created_at: datetime
     owner_id: int
+    assigned_department: Optional[str] = None
 
     class Config:
         from_attributes = True

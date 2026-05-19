@@ -6,6 +6,7 @@ from google.genai import Client
 from dotenv import load_dotenv
 import os
 import jwt
+import json
 
 
 # YOU MUST CALL THIS FUNCTION TO WAKE UP THE .ENV FILE!
@@ -39,51 +40,56 @@ def create_access_token(data: dict):
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY") 
 client = Client(api_key=GEMINI_API_KEY)
 
-def get_ai_priority(title: str, description: str) -> str:
-    """Uses Google Gemini to determine task priority."""
+def get_ai_priority(title: str, description: str) -> dict:
+    """Uses Google Gemini to determine task priority and department."""
     
     task_text = f"Title: {title}\nDescription: {description or 'No description provided.'}"
-    
+
     prompt = f"""
-    You are an AI Task Manager. Read the following task and determine its priority level.
-    Respond with EXACTLY ONE WORD from this list: High, Medium, Low.
-    Do not add any punctuation, explanation, or extra text.
+    You are an AI Enterprise Dispatcher. Analyze the task and determine its priority and target department.
     
-    Rules:
+    You MUST respond with EXACTLY ONE valid JSON object. 
+    Do not wrap the JSON in markdown formatting or code blocks (like ```json). Just the raw JSON.
+    
+    Available Departments: "IT", "HR", "Facilities", "Finance", "General"
+    
+    Rules for Priority:
     - HIGH: System crashes, security threats, revenue loss, or broken core features.
     - MEDIUM: Standard feature requests, minor bugs, and non-blocking issues.
     - LOW: Cosmetic updates, internal requests, and office supplies.
     
     Examples:
     Task: Title: Coffee machine broken. Description: The kitchen needs espresso.
-    Priority: Low
+    Output: {{"priority": "Low", "department": "Facilities"}}
     
     Task: Title: Overcharging error. Description: Customers are being billed twice.
-    Priority: High
+    Output: {{"priority": "High", "department": "Finance"}}
     
-    Task: Title: Button color. Description: Make the submit button darker green.
-    Priority: Low
-    
-    CRITICAL INSTRUCTION: Always judge the priority based on the business and revenue impact described, not just the keywords in the title.
+    Task: Title: Need new laptop. Description: My screen cracked.
+    Output: {{"priority": "Medium", "department": "IT"}}
     
     Task:
     {task_text}
     """
     
     try:
-        # Using the modern client and the ultra-cheap Flash Lite model
         response = client.models.generate_content(
             model='gemini-2.5-flash',
             contents=prompt,
         )
-        # The .replace() removes accidental periods before we check the list!
-        priority = response.text.strip().replace(".", "").capitalize()
         
-        if priority not in ["High", "Medium", "Low"]:
-            return "Medium"
-            
-        return priority
+        # 1. Strip any accidental markdown formatting (like ```json)
+        clean_text = response.text.replace('```json', '').replace('```', '').strip()
         
+        # 2. Convert the AI's text response into a real Python dictionary
+        ai_data = json.loads(clean_text)
+        
+        return ai_data
+        
+    except json.JSONDecodeError as e:
+        print(f"JSON Parse Error: {e}")
+        # Failsafe: Return a default dictionary if Gemini hallucinates bad JSON
+        return {"priority": "Medium", "department": "General"}
     except Exception as e:
         print(f"AI Engine Error: {e}")
-        return "Medium"
+        return {"priority": "Medium", "department": "General"}

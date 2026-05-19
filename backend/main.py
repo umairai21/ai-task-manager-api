@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import models, schemas, utils
 from database import engine, get_db
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
+from typing import List
 import jwt
 
 # Create database tables
@@ -104,7 +105,9 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     new_user = models.User(
         email=user.email,
         username=user.username,
-        hashed_password=hashed_pwd
+        hashed_password=hashed_pwd,
+        role=user.role,              # FIXED: Explicitly save the role
+        department=user.department   # FIXED: Explicitly save the department
     )
 
     # 5. Save to the database
@@ -116,22 +119,29 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return new_user
 
 # --- SECURE TASK CREATION (WITH AI ENGINE) ---
-@app.post("/tasks/", response_model=schemas.TaskResponse, status_code=status.HTTP_201_CREATED)
+@app.post("/tasks", response_model=schemas.TaskResponse)
 def create_task(
     task: schemas.TaskCreate, 
     db: Session = Depends(get_db), 
     current_user: models.User = Depends(get_current_user)
 ):
-    # 1. Ask the AI for the priority based on what the user typed!
-    ai_priority = utils.get_ai_priority(title=task.title, description=task.description)
+    # 1. Hand the unstructured text to your AI Manager
+    ai_analysis = utils.get_ai_priority(task.title, task.description)
     
-    # 2. Unpack the user's data, OVERRIDE the priority with the AI's answer, and attach the user ID
-    task_data = task.model_dump()
-    task_data["priority"] = ai_priority # Inject the AI decision here!
+    # 2. Extract the structured data (using .get() adds a safety net if a key is missing)
+    ai_priority = ai_analysis.get("priority", "Medium")
+    target_dept = ai_analysis.get("department", "General")
+
+    # 3. Assemble the final database record using your upgraded schema
+    new_task = models.Task(
+        title=task.title,
+        description=task.description,
+        priority=ai_priority,
+        assigned_department=target_dept, # The AI's routing decision
+        owner_id=current_user.id         # The human who submitted it
+    )
     
-    new_task = models.Task(**task_data, owner_id=current_user.id)
-    
-    # 3. Save to database
+    # 4. Save to PostgreSQL
     db.add(new_task)
     db.commit()
     db.refresh(new_task)
@@ -140,14 +150,31 @@ def create_task(
 
 
 # --- SECURE TASK RETRIEVAL ---
-@app.get("/tasks/", response_model=list[schemas.TaskResponse])
+@app.get("/tasks", response_model=List[schemas.TaskResponse])
 def read_tasks(
+    skip: int = 0, 
+    limit: int = 100, 
     db: Session = Depends(get_db), 
-    current_user: models.User = Depends(get_current_user) # <-- The lock!
+    current_user: models.User = Depends(get_current_user)
 ):
-    # We only fetch tasks belonging to the currently logged-in user
-    tasks = db.query(models.Task).filter(models.Task.owner_id == current_user.id).all()
+    # 1. ADMIN RULE: Executives see the entire company's workload
+    if current_user.role == "admin":
+        tasks = db.query(models.Task).offset(skip).limit(limit).all()
+        
+    # 2. RESOLVER RULE: Workers ONLY see tasks assigned to their department
+    elif current_user.role == "employee":
+        tasks = db.query(models.Task).filter(
+            models.Task.assigned_department == current_user.department
+        ).offset(skip).limit(limit).all()
+        
+    # 3. DISPATCHER RULE: The person at the front desk only sees what they submitted
+    else:
+        tasks = db.query(models.Task).filter(
+            models.Task.owner_id == current_user.id
+        ).offset(skip).limit(limit).all()
+        
     return tasks
+
 
 # --- SECURE TASK UPDATE ---
 @app.put("/tasks/{task_id}", response_model=schemas.TaskResponse)
