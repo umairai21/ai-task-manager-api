@@ -136,14 +136,17 @@ def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Dep
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
         
-    if user_update.role:
-        user.role = user_update.role
+    # We replaced 'role' with 'email' here
+    if user_update.email:
+        # Optional: Add a check here to ensure the new email isn't already taken
+        user.email = user_update.email
     if user_update.department:
         user.department = user_update.department
         
     db.commit()
     db.refresh(user)
     return user
+
 
 # --- ADMIN ROUTE: DELETE USER (DELETE) ---
 @app.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
