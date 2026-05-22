@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { useState } from 'react'
+import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 function App() {
   const [token, setToken] = useState(null)
@@ -84,39 +84,70 @@ function App() {
     const prioCounts = { High: 0, Medium: 0, Low: 0 }
 
     tasks.forEach(t => {
-      // Tally Departments
       const dept = t.assigned_department || 'Unassigned'
       deptCounts[dept] = (deptCounts[dept] || 0) + 1
-      // Tally Priorities
       if (prioCounts[t.priority] !== undefined) prioCounts[t.priority]++
     })
 
     const pieData = Object.keys(deptCounts).map(key => ({ name: key, value: deptCounts[key] }))
     const barData = [
-      { name: 'High', count: prioCounts.High, fill: '#ff4d4f' },
-      { name: 'Medium', count: prioCounts.Medium, fill: '#faad14' },
-      { name: 'Low', count: prioCounts.Low, fill: '#52c41a' }
+      { name: 'High', count: prioCounts.High, fill: '#ef4444' },   // Tailwind Red-500
+      { name: 'Medium', count: prioCounts.Medium, fill: '#f59e0b' }, // Tailwind Amber-500
+      { name: 'Low', count: prioCounts.Low, fill: '#10b981' }      // Tailwind Emerald-500
     ]
 
     return { pieData, barData }
   }
 
   const { pieData, barData } = getChartData()
-  const PIE_COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8']
+  // Updated to Tailwind color palette
+  const PIE_COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'] 
 
   // ==========================================
   // RENDER SCREEN 1: LOGIN
   // ==========================================
   if (!token) {
     return (
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', backgroundColor: '#f4f4f9', fontFamily: 'sans-serif' }}>
-        <div style={{ backgroundColor: 'white', padding: '40px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', width: '300px' }}>
-          <h2 style={{ marginTop: 0, textAlign: 'center' }}>Enterprise Login</h2>
-          {loginError && <p style={{ color: 'red', fontSize: '14px', textAlign: 'center' }}>{loginError}</p>}
-          <form onSubmit={handleLogin} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-            <input type="email" placeholder="Email address" value={loginEmail} onChange={(e) => setLoginEmail(e.target.value)} style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} required />
-            <input type="password" placeholder="Password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc' }} required />
-            <button type="submit" style={{ padding: '10px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}>Log In</button>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 font-sans px-4">
+        <div className="bg-white p-10 rounded-2xl shadow-xl border border-slate-100 w-full max-w-md">
+          <div className="text-center mb-8">
+            <h2 className="text-3xl font-extrabold text-slate-900 tracking-tight">Enterprise Login</h2>
+            <p className="text-slate-500 mt-2 text-sm">Sign in to access the task dashboard</p>
+          </div>
+          
+          {loginError && (
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-medium text-center mb-6 border border-red-100">
+              {loginError}
+            </div>
+          )}
+          
+          <form onSubmit={handleLogin} className="flex flex-col gap-5">
+            <div>
+              <input 
+                type="email" 
+                placeholder="Email address" 
+                value={loginEmail} 
+                onChange={(e) => setLoginEmail(e.target.value)} 
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-slate-50 focus:bg-white" 
+                required 
+              />
+            </div>
+            <div>
+              <input 
+                type="password" 
+                placeholder="Password" 
+                value={loginPassword} 
+                onChange={(e) => setLoginPassword(e.target.value)} 
+                className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all bg-slate-50 focus:bg-white" 
+                required 
+              />
+            </div>
+            <button 
+              type="submit" 
+              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md shadow-blue-500/30 mt-2"
+            >
+              Secure Log In
+            </button>
           </form>
         </div>
       </div>
@@ -127,73 +158,156 @@ function App() {
   // RENDER SCREEN 2: DASHBOARD
   // ==========================================
   return (
-    <div style={{ padding: '40px', fontFamily: 'sans-serif', backgroundColor: '#f4f4f9', minHeight: '100vh' }}>
-      <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-        
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px' }}>
-          <div>
-            <h1 style={{ color: '#333', margin: '0 0 5px 0' }}>AI Task Dashboard</h1>
-            <p style={{ color: '#666', margin: 0 }}>Logged in as: <strong>{currentUser}</strong></p>
-          </div>
-          <button onClick={handleLogout} style={{ padding: '8px 16px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>Logout</button>
+    <div className="min-h-screen bg-slate-50 font-sans pb-12">
+      
+      {/* Premium Navigation Bar */}
+      <nav className="bg-slate-900 text-white px-6 py-4 flex flex-col sm:flex-row justify-between items-center shadow-lg mb-8">
+        <div className="flex items-center gap-3 mb-4 sm:mb-0">
+            <div className="bg-blue-500 text-white p-2 rounded-lg font-bold shadow-inner">AI</div>
+            <h1 className="text-xl font-semibold tracking-wide">Enterprise Dispatcher</h1>
         </div>
+        <div className="flex items-center gap-4">
+            <span className="text-slate-300 text-sm hidden sm:block">
+              Logged in as: <span className="text-white font-medium">{currentUser}</span>
+            </span>
+            <button 
+                onClick={handleLogout} 
+                className="bg-slate-800 hover:bg-red-500 border border-slate-700 hover:border-red-500 transition-all px-4 py-2 rounded-md text-sm font-medium shadow-sm"
+            >
+                Logout
+            </button>
+        </div>
+      </nav>
 
+      <div className="max-w-5xl mx-auto px-4">
+        
         {/* ADMIN ANALYTICS DASHBOARD (Only shows for the Boss) */}
         {currentUser === 'boss@test.com' && tasks.length > 0 && (
-          <div style={{ display: 'flex', gap: '20px', marginBottom: '30px' }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-10">
             
-            {/* PIE CHART: Department Workload */}
-            <div style={{ flex: 1, backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ marginTop: 0, textAlign: 'center', color: '#555' }}>Department Workload</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" outerRadius={80} fill="#8884d8" dataKey="value" label>
-                    {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip />
-                </PieChart>
-              </ResponsiveContainer>
+            {/* PIE CHART */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center">
+              <h3 className="text-lg font-bold text-slate-700 mb-2">Department Workload</h3>
+              <div className="w-full h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" label>
+                      {pieData.map((entry, index) => <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
-            {/* BAR CHART: Crisis Levels */}
-            <div style={{ flex: 1, backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ marginTop: 0, textAlign: 'center', color: '#555' }}>Company Crisis Levels</h3>
-              <ResponsiveContainer width="100%" height={200}>
-                <BarChart data={barData}>
-                  <XAxis dataKey="name" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+            {/* BAR CHART */}
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center">
+              <h3 className="text-lg font-bold text-slate-700 mb-2">Company Crisis Levels</h3>
+              <div className="w-full h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={barData} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                    <YAxis allowDecimals={false} axisLine={false} tickLine={false} />
+                    <Tooltip cursor={{ fill: '#f8fafc' }} contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }} />
+                    <Bar dataKey="count" radius={[6, 6, 0, 0]} barSize={40} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
             </div>
 
           </div>
         )}
 
+        {/* DISPATCHER FORM */}
         {currentUser === 'dispatcher@test.com' && (
-            <div style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', marginBottom: '30px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-                <h3 style={{ marginTop: 0 }}>Create New Task</h3>
-                <form onSubmit={handleCreateTask} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <input type="text" placeholder="Task Title (e.g. Server Crash)" value={title} onChange={(e) => setTitle(e.target.value)} style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc', fontSize: '16px' }} required />
-                    <textarea placeholder="Provide details for the AI to analyze..." value={description} onChange={(e) => setDescription(e.target.value)} style={{ padding: '10px', borderRadius: '4px', border: '1px solid #ccc', minHeight: '80px', fontFamily: 'inherit', fontSize: '14px' }} />
-                    <button type="submit" disabled={isSubmitting} style={{ padding: '12px', backgroundColor: isSubmitting ? '#999' : '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: isSubmitting ? 'wait' : 'pointer', fontWeight: 'bold' }}>{isSubmitting ? 'AI is Analyzing...' : 'Create & Analyze Task'}</button>
-                </form>
-            </div>
+          <div className="bg-white p-6 md:p-8 rounded-2xl shadow-sm border border-slate-100 mb-10 max-w-3xl mx-auto">
+              <div className="mb-6">
+                <h3 className="text-xl font-bold text-slate-800">Route a New Ticket</h3>
+                <p className="text-sm text-slate-500">AI will automatically categorize and assign priority.</p>
+              </div>
+              
+              <form onSubmit={handleCreateTask} className="flex flex-col gap-5">
+                  <input 
+                    type="text" 
+                    placeholder="Brief title (e.g., Server Crash)" 
+                    value={title} 
+                    onChange={(e) => setTitle(e.target.value)} 
+                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-all font-medium" 
+                    required 
+                  />
+                  <textarea 
+                    placeholder="Provide details for the AI to analyze..." 
+                    value={description} 
+                    onChange={(e) => setDescription(e.target.value)} 
+                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[120px] resize-y bg-slate-50 focus:bg-white transition-all text-sm" 
+                  />
+                  <button 
+                    type="submit" 
+                    disabled={isSubmitting} 
+                    className={`py-3 px-4 rounded-lg font-bold transition-all shadow-md mt-2 flex justify-center items-center ${isSubmitting ? 'bg-slate-400 text-slate-100 cursor-not-allowed shadow-none' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/30'}`}
+                  >
+                    {isSubmitting ? 'Processing via AI...' : 'Analyze & Dispatch Ticket'}
+                  </button>
+              </form>
+          </div>
         )}
 
-        {loading ? <p>Loading your secure dashboard...</p> : tasks.length === 0 ? <p style={{ textAlign: 'center', color: '#666' }}>No tasks found for your department.</p> : (
-          tasks.map(task => (
-            <div key={task.id} style={{ backgroundColor: 'white', border: '1px solid #e0e0e0', borderLeft: task.priority === 'High' ? '5px solid #ff4d4f' : task.priority === 'Medium' ? '5px solid #faad14' : '5px solid #52c41a', padding: '20px', marginBottom: '15px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.05)' }}>
-              <h3 style={{ margin: '0 0 10px 0', color: '#111', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                {task.title} 
-                <span style={{ fontSize: '14px', color: task.priority === 'High' ? '#ff4d4f' : task.priority === 'Medium' ? '#faad14' : '#52c41a' }}>({task.priority})</span>
-                {task.assigned_department && <span style={{ fontSize: '12px', color: '#555', backgroundColor: '#eee', padding: '4px 8px', borderRadius: '12px', fontWeight: 'normal' }}>{task.assigned_department}</span>}
-              </h3>
-              <p style={{ margin: 0, color: '#555', lineHeight: '1.5' }}>{task.description}</p>
+        {/* TASK LIST */}
+        <div className="max-w-3xl mx-auto flex flex-col gap-4">
+          {loading ? (
+            <div className="text-center py-10">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-slate-500 font-medium">Syncing with secure database...</p>
             </div>
-          ))
-        )}
+          ) : tasks.length === 0 ? (
+            <div className="text-center py-12 bg-white rounded-2xl border border-slate-100 border-dashed">
+              <p className="text-slate-500 font-medium text-lg">Inbox Zero</p>
+              <p className="text-slate-400 text-sm mt-1">No tasks assigned to your department.</p>
+            </div>
+          ) : (
+            tasks.map(task => (
+              <div 
+                key={task.id} 
+                className={`bg-white rounded-xl shadow-sm border border-slate-200 p-6 hover:shadow-md transition-all border-l-4 
+                  ${task.priority === 'High' ? 'border-l-red-500' : 
+                    task.priority === 'Medium' ? 'border-l-amber-500' : 
+                    'border-l-emerald-500'}`}
+              >
+                <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start mb-3 gap-2">
+                  <h4 className="text-lg font-bold text-slate-800 leading-tight">{task.title}</h4>
+                  
+                  {/* Dynamic Priority Badge */}
+                  <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider whitespace-nowrap self-start
+                      ${task.priority === 'High' ? 'bg-red-100 text-red-700' : 
+                        task.priority === 'Medium' ? 'bg-amber-100 text-amber-700' : 
+                        'bg-emerald-100 text-emerald-700'}`}
+                  >
+                      {task.priority} Priority
+                  </span>
+                </div>
+                
+                <p className="text-slate-600 text-sm mb-5 leading-relaxed bg-slate-50 p-3 rounded-lg border border-slate-100">
+                  {task.description}
+                </p>
+                
+                <div className="flex justify-between items-center pt-4 border-t border-slate-100 mt-auto">
+                  <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <svg className="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m3-4h1m-1 4h1m-5 8h8"></path></svg>
+                    {task.assigned_department}
+                  </span>
+                  
+                  {/* The Resolve Button Shell */}
+                  {currentUser !== 'boss@test.com' && currentUser !== 'dispatcher@test.com' && (
+                      <button className="text-sm font-bold text-emerald-600 hover:text-white bg-emerald-50 hover:bg-emerald-500 px-4 py-2 rounded-lg transition-colors border border-emerald-200 hover:border-emerald-500 shadow-sm flex items-center gap-2">
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M5 13l4 4L19 7"></path></svg>
+                          Resolve Ticket
+                      </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
 
       </div>
     </div>
