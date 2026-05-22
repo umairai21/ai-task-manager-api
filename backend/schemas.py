@@ -30,6 +30,11 @@ class UserResponse(UserBase):
         from_attributes = True
 
 
+class UserUpdate(BaseModel):
+    email: Optional[str] = None
+    department: Optional[str] = None
+
+
 # Base schema for standard task properties
 class TaskBase(BaseModel):
     title: str

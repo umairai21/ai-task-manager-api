@@ -118,6 +118,56 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     # 6. Return the created user 
     return new_user
 
+
+# --- ADMIN ROUTE: GET ALL USERS (READ) ---
+@app.get("/users/", response_model=List[schemas.UserResponse])
+def get_all_users(db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized. Admins only.")
+    return db.query(models.User).all()
+
+# --- ADMIN ROUTE: UPDATE USER (UPDATE) ---
+@app.put("/users/{user_id}", response_model=schemas.UserResponse)
+def update_user(user_id: int, user_update: schemas.UserUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized.")
+        
+    user = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # We replaced 'role' with 'email' here
+    if user_update.email:
+        # Optional: Add a check here to ensure the new email isn't already taken
+        user.email = user_update.email
+    if user_update.department:
+        user.department = user_update.department
+        
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+# --- ADMIN ROUTE: DELETE USER (DELETE) ---
+@app.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_user(user_id: int, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized.")
+        
+    user_to_delete = db.query(models.User).filter(models.User.id == user_id).first()
+    if not user_to_delete:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    # Security Check: Prevent the boss from accidentally deleting themselves!
+    if user_to_delete.id == current_user.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own admin account.")
+        
+    db.delete(user_to_delete)
+    db.commit()
+    return
+
+
+
 # --- SECURE TASK CREATION (WITH AI ENGINE) ---
 @app.post("/tasks", response_model=schemas.TaskResponse)
 def create_task(

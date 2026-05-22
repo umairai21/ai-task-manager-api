@@ -1,19 +1,47 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 
 function App() {
-  const [token, setToken] = useState(null)
-  const [currentUser, setCurrentUser] = useState("")
+  const [token, setToken] = useState(localStorage.getItem("token") || null)
+  const [currentUser, setCurrentUser] = useState(localStorage.getItem("currentUser") || "")
   const [loginEmail, setLoginEmail] = useState("")
   const [loginPassword, setLoginPassword] = useState("securepassword123")
   const [loginError, setLoginError] = useState("")
 
   const [tasks, setTasks] = useState([])
+  const [users, setUsers] = useState([])
+
+  // --- STATE FOR EDITING USERS ---
+  const [editingUser, setEditingUser] = useState(null)
+  const [editEmail, setEditEmail] = useState("")
+  const [editDept, setEditDept] = useState("")
+  const [isUpdatingUser, setIsUpdatingUser] = useState(false)
+  const [showCustomDeptEdit, setShowCustomDeptEdit] = useState(false)
+
   const [loading, setLoading] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  // --- STATE FOR NEW EMPLOYEE ---
+  const [isAddingUser, setIsAddingUser] = useState(false)
+  const [newEmail, setNewEmail] = useState("")
+  const [newPassword, setNewPassword] = useState("")
+  const [newDept, setNewDept] = useState("")
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
+  const [showCustomDeptAdd, setShowCustomDeptAdd] = useState(false)
+
+
+  // --- LOGIC: PERSISTENT LOGIN SYNC ---
+  useEffect(() => {
+    if (token) {
+      fetchTasks(token)
+      if (currentUser === 'boss@test.com') {
+        fetchUsers(token)
+      }
+    }
+  }, []) // Empty brackets mean this runs exactly once when the page loads
+  
   // --- LOGIC: LOGIN ---
   const handleLogin = async (e) => {
     e.preventDefault()
@@ -26,9 +54,19 @@ function App() {
       })
       if (!res.ok) throw new Error("Invalid credentials")
       const data = await res.json()
+
       setToken(data.access_token)
       setCurrentUser(loginEmail)
+
+      // Save to browser storage!
+      localStorage.setItem("token", data.access_token)
+      localStorage.setItem("currentUser", loginEmail)
+
       fetchTasks(data.access_token)
+
+      if (loginEmail === 'boss@test.com') {
+        fetchUsers(data.access_token)
+      }
     } catch (error) {
       setLoginError("Login failed. Check your credentials.")
     }
@@ -39,6 +77,10 @@ function App() {
     setTasks([])
     setCurrentUser("")
     setLoginEmail("")
+
+    // Wipe the browser storage!
+    localStorage.removeItem("token")
+    localStorage.removeItem("currentUser")
   }
 
   const fetchTasks = async (authToken) => {
@@ -77,6 +119,101 @@ function App() {
       setIsSubmitting(false)
     }
   }
+
+  // Fetch all users (Only works if they are an admin)
+  const fetchUsers = async (authToken) => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/users/', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      })
+      if (res.ok) setUsers(await res.json())
+    } catch (error) {
+      console.error("Error fetching users:", error)
+    }
+  }
+
+  // Delete a user
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to permanently delete this user?")) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        // Remove the deleted user from the React screen instantly
+        setUsers(users.filter(u => u.id !== userId)) 
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error)
+    }
+  }
+
+
+  // Update a user (Admin Only)
+  const handleUpdateUser = async (e) => {
+    e.preventDefault()
+    setIsUpdatingUser(true)
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/users/${editingUser.id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}` 
+        },
+        body: JSON.stringify({ email: editEmail, department: editDept })
+      })
+      
+      if (res.ok) {
+        const updatedUser = await res.json()
+        // Instantly update the specific user in our local React state
+        setUsers(users.map(u => u.id === updatedUser.id ? updatedUser : u))
+        setEditingUser(null) // Close the modal
+      }
+    } catch (error) {
+      console.error("Error updating user:", error)
+    } finally {
+      setIsUpdatingUser(false)
+    }
+  }
+
+
+  // Create a new employee (Admin Only)
+  const handleCreateEmployee = async (e) => {
+    e.preventDefault()
+    setIsCreatingUser(true)
+    try {
+      const res = await fetch('http://127.0.0.1:8000/users/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: newEmail,
+          password: newPassword,
+          role: "worker", // Automatically set so the admin doesn't have to!
+          department: newDept
+        })
+      })
+
+      if (res.ok) {
+        const createdUser = await res.json()
+        setUsers([...users, createdUser]) // Instantly add to table
+        setIsAddingUser(false) // Close modal
+        setNewEmail("")
+        setNewPassword("")
+        setNewDept("")
+      } else {
+        alert("Error: That email might already be registered in the system.")
+      }
+    } catch (error) {
+      console.error("Error creating user:", error)
+    } finally {
+      setIsCreatingUser(false)
+    }
+  }
+
+  // --- DYNAMIC DEPARTMENT LIST ---
+  // Scans all tasks, grabs the departments, and removes duplicates using a Set
+  const uniqueDepartments = [...new Set(tasks.map(t => t.assigned_department).filter(Boolean))]
 
   // --- LOGIC: DATA CRUNCHING FOR CHARTS ---
   const getChartData = () => {
@@ -215,6 +352,75 @@ function App() {
               </div>
             </div>
 
+            {/* --- USER MANAGEMENT PANEL (Admin Only) --- */}
+            {/* --- USER MANAGEMENT PANEL (Admin Only) --- */}
+            {currentUser === 'boss@test.com' && users.length > 0 && (
+              <div className="bg-white rounded-2xl shadow-sm border border-slate-100 mb-10 col-span-1 md:col-span-2">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-6 border-b border-slate-100 gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-800">User Management</h3>
+                    <p className="text-sm text-slate-500">Manage employee access and department routing.</p>
+                  </div>
+                  <button 
+                    onClick={() => setIsAddingUser(true)}
+                    className="bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-lg text-sm font-bold transition-colors shadow-md w-full sm:w-auto"
+                  >
+                    + New Employee
+                  </button>
+                </div>
+                
+                <div className="overflow-x-auto w-full">
+                  <table className="w-full text-left whitespace-nowrap">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+                        <th className="p-4 font-semibold w-24">User ID</th>
+                        <th className="p-4 font-semibold">Email</th>
+                        <th className="p-4 font-semibold">System Role</th>
+                        <th className="p-4 font-semibold">Department</th>
+                        <th className="p-4 font-semibold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {users.map(u => (
+                        <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="p-4 text-slate-500 font-medium">#{u.id}</td>
+                          <td className="p-4 text-slate-800 font-bold">{u.email}</td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase 
+                              ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 
+                                u.role === 'dispatcher' ? 'bg-blue-100 text-blue-700' : 
+                                'bg-slate-100 text-slate-700'}`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-600 font-medium">{u.department || 'General'}</td>
+                          <td className="p-4 text-right">
+                            <button 
+                              onClick={() => {
+                                setEditingUser(u);
+                                setEditEmail(u.email);
+                                setEditDept(u.department || "");
+                                setShowCustomDeptEdit(!uniqueDepartments.includes(u.department) && u.department !== "");
+                              }} 
+                              className="text-blue-600 hover:text-blue-800 font-bold text-sm mr-4 transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button 
+                              onClick={() => handleDeleteUser(u.id)} 
+                              className="text-red-500 hover:text-red-700 font-bold text-sm transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 
@@ -308,7 +514,188 @@ function App() {
             ))
           )}
         </div>
+        {/* --- EDIT USER MODAL OVERLAY --- */}
+        {editingUser && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
+              <h3 className="text-xl font-bold text-slate-800 mb-1">Edit Employee Profile</h3>
+              <p className="text-sm text-slate-500 mb-6">
+                Modifying settings for System ID: <span className="font-bold text-slate-800">#{editingUser.id}</span>
+              </p>
 
+              <form onSubmit={handleUpdateUser} className="flex flex-col gap-5">
+                
+                {/* Replaced Role Dropdown with Email Input */}
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
+                  <input 
+                    type="email" 
+                    value={editEmail} 
+                    onChange={(e) => setEditEmail(e.target.value)}
+                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-all font-medium text-slate-800"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-bold text-slate-700">Department Assignment</label>
+                    {showCustomDeptEdit && (
+                      <button type="button" onClick={() => setShowCustomDeptEdit(false)} className="text-xs font-bold text-blue-600 hover:text-blue-800">
+                        View List
+                      </button>
+                    )}
+                  </div>
+                  
+                  {showCustomDeptEdit ? (
+                    <input 
+                      type="text" 
+                      value={editDept} 
+                      onChange={(e) => setEditDept(e.target.value)}
+                      placeholder="Type custom department name..." 
+                      className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-all"
+                      autoFocus
+                      required
+                    />
+                  ) : (
+                    <select 
+                      value={uniqueDepartments.includes(editDept) ? editDept : "NEW"} 
+                      onChange={(e) => {
+                        if (e.target.value === "NEW") {
+                          setShowCustomDeptEdit(true);
+                          setEditDept("");
+                        } else {
+                          setEditDept(e.target.value);
+                        }
+                      }}
+                      className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-all font-medium text-slate-700"
+                    >
+                      <option value="" disabled>Select a department...</option>
+                      {uniqueDepartments.map((dept, idx) => (
+                        <option key={idx} value={dept}>{dept}</option>
+                      ))}
+                      <option value="NEW" className="font-bold text-blue-600">+ Create New Department...</option>
+                    </select>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-100">
+                  <button 
+                    type="button" 
+                    onClick={() => setEditingUser(null)}
+                    className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isUpdatingUser}
+                    className="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg transition-colors shadow-md shadow-blue-500/30 disabled:bg-slate-400 disabled:shadow-none"
+                  >
+                    {isUpdatingUser ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+        {/* --- END OF MODAL --- */}
+
+        {/* --- ADD NEW EMPLOYEE MODAL OVERLAY --- */}
+        {isAddingUser && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-white p-6 rounded-2xl shadow-xl w-full max-w-md border border-slate-100">
+              <h3 className="text-xl font-bold text-slate-800 mb-1">Add New Employee</h3>
+              <p className="text-sm text-slate-500 mb-6">Create a standard worker account.</p>
+
+              <form onSubmit={handleCreateEmployee} className="flex flex-col gap-5">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Email Address</label>
+                  <input 
+                    type="email" 
+                    value={newEmail} 
+                    onChange={(e) => setNewEmail(e.target.value)}
+                    placeholder="worker@company.com" 
+                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-all"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">Temporary Password</label>
+                  <input 
+                    type="password" 
+                    value={newPassword} 
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Minimum 8 characters" 
+                    className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-all"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between items-center mb-2">
+                    <label className="block text-sm font-bold text-slate-700">Department Assignment</label>
+                    {showCustomDeptAdd && (
+                      <button type="button" onClick={() => setShowCustomDeptAdd(false)} className="text-xs font-bold text-blue-600 hover:text-blue-800">
+                        View List
+                      </button>
+                    )}
+                  </div>
+                  
+                  {showCustomDeptAdd || uniqueDepartments.length === 0 ? (
+                    <input 
+                      type="text" 
+                      value={newDept} 
+                      onChange={(e) => setNewDept(e.target.value)}
+                      placeholder="Type custom department name..." 
+                      className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-all"
+                      autoFocus
+                      required
+                    />
+                  ) : (
+                    <select 
+                      value={newDept} 
+                      onChange={(e) => {
+                        if (e.target.value === "NEW") {
+                          setShowCustomDeptAdd(true);
+                          setNewDept("");
+                        } else {
+                          setNewDept(e.target.value);
+                        }
+                      }}
+                      className="w-full px-4 py-3 rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50 focus:bg-white transition-all font-medium text-slate-700"
+                      required
+                    >
+                      <option value="" disabled>Select a department...</option>
+                      {uniqueDepartments.map((dept, idx) => (
+                        <option key={idx} value={dept}>{dept}</option>
+                      ))}
+                      <option value="NEW" className="font-bold text-blue-600">+ Create New Department...</option>
+                    </select>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-3 mt-4 pt-4 border-t border-slate-100">
+                  <button 
+                    type="button" 
+                    onClick={() => setIsAddingUser(false)}
+                    className="px-5 py-2.5 text-slate-600 font-bold hover:bg-slate-100 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button 
+                    type="submit" 
+                    disabled={isCreatingUser}
+                    className="px-5 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-lg transition-colors shadow-md disabled:bg-slate-400 disabled:shadow-none"
+                  >
+                    {isCreatingUser ? 'Creating...' : 'Create Account'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )
