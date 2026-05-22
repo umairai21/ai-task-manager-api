@@ -216,4 +216,4 @@ def delete_task(
     # 2. Delete it
     db.delete(db_task)
     db.commit()
-    return # A 204 status code means successful action, but no data to return
+    return # A 204 status code means successful action, but no dadta to return
