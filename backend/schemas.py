@@ -28,6 +28,11 @@ class UserResponse(UserBase):
 
     class Config:
         from_attributes = True
+        
+
+class UserUpdate(BaseModel):
+    role: Optional[str] = None
+    department: Optional[str] = None
 
 
 # Base schema for standard task properties

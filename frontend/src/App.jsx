@@ -9,6 +9,7 @@ function App() {
   const [loginError, setLoginError] = useState("")
 
   const [tasks, setTasks] = useState([])
+  const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
@@ -29,6 +30,9 @@ function App() {
       setToken(data.access_token)
       setCurrentUser(loginEmail)
       fetchTasks(data.access_token)
+      if (loginEmail === 'boss@test.com') {
+        fetchUsers(data.access_token)
+      }
     } catch (error) {
       setLoginError("Login failed. Check your credentials.")
     }
@@ -75,6 +79,35 @@ function App() {
       console.error("Error creating task:", error)
     } finally {
       setIsSubmitting(false)
+    }
+  }
+
+  // Fetch all users (Only works if they are an admin)
+  const fetchUsers = async (authToken) => {
+    try {
+      const res = await fetch('http://127.0.0.1:8000/users/', {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      })
+      if (res.ok) setUsers(await res.json())
+    } catch (error) {
+      console.error("Error fetching users:", error)
+    }
+  }
+
+  // Delete a user
+  const handleDeleteUser = async (userId) => {
+    if (!window.confirm("Are you sure you want to permanently delete this user?")) return;
+    try {
+      const res = await fetch(`http://127.0.0.1:8000/users/${userId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
+      if (res.ok) {
+        // Remove the deleted user from the React screen instantly
+        setUsers(users.filter(u => u.id !== userId)) 
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error)
     }
   }
 
@@ -214,6 +247,61 @@ function App() {
                 </ResponsiveContainer>
               </div>
             </div>
+
+            {/* --- USER MANAGEMENT PANEL (Admin Only) --- */}
+            {currentUser === 'boss@test.com' && users.length > 0 && (
+              <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 mb-10 overflow-hidden">
+                <div className="flex justify-between items-center mb-6">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-800">User Management</h3>
+                    <p className="text-sm text-slate-500">Manage employee access, roles, and departments.</p>
+                  </div>
+                  <button className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-bold transition-colors shadow-md">
+                    + New Employee
+                  </button>
+                </div>
+                
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-y border-slate-200 text-slate-500 text-xs uppercase tracking-wider">
+                        <th className="p-4 font-semibold">User ID</th>
+                        <th className="p-4 font-semibold">Email</th>
+                        <th className="p-4 font-semibold">System Role</th>
+                        <th className="p-4 font-semibold">Department</th>
+                        <th className="p-4 font-semibold text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {users.map(u => (
+                        <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors">
+                          <td className="p-4 text-slate-500 font-medium">#{u.id}</td>
+                          <td className="p-4 text-slate-800 font-bold">{u.email}</td>
+                          <td className="p-4">
+                            <span className={`px-2 py-1 rounded-md text-xs font-bold uppercase 
+                              ${u.role === 'admin' ? 'bg-purple-100 text-purple-700' : 
+                                u.role === 'dispatcher' ? 'bg-blue-100 text-blue-700' : 
+                                'bg-slate-100 text-slate-700'}`}>
+                              {u.role}
+                            </span>
+                          </td>
+                          <td className="p-4 text-slate-600 font-medium">{u.department || 'General'}</td>
+                          <td className="p-4 text-right">
+                            <button className="text-blue-600 hover:text-blue-800 font-bold text-sm mr-4 transition-colors">Edit</button>
+                            <button 
+                              onClick={() => handleDeleteUser(u.id)} 
+                              className="text-red-500 hover:text-red-700 font-bold text-sm transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
           </div>
         )}
